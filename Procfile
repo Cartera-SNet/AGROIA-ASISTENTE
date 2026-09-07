@@ -1,0 +1,1 @@
+web: python sinric_promedio.py
