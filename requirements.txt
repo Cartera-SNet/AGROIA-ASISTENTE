@@ -1,5 +1,2 @@
-python-telegram-bot[webhooks]
 requests
-python-dotenv
-groq
 sinricpro

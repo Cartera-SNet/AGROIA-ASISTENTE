@@ -1,0 +1,35 @@
+﻿FRASES DE VOZ Y COMPROBACIONES — PUENTE SINRIC PRO
+=================================================
+
+QUÉ DATOS TIENE CADA DISPOSITIVO (probado: los valores que se envían son los correctos y se actualizan cada 60 s)
+   AgroIA Ambiente   temperatura del aire (última)      +  humedad del AIRE (última)
+   AgroIA Promedio   temperatura promedio de 24 horas   +  humedad del aire promedio de 24 horas
+   AgroIA Suelo      humedad del SUELO (última)   [opcional; su «temperatura» es la del aire: pregunta por la humedad]
+   (El pH no se puede consultar por voz: Sinric Pro no tiene un tipo de dispositivo para pH. Pregúntalo en el bot de Telegram.)
+
+FRASES PARA ALEXA (documentadas por Sinric Pro para sensores de temperatura)
+   • Alexa, ¿cuál es la temperatura de AgroIA Ambiente?       -> temperatura del aire, última lectura
+   • Alexa, ¿cuál es la temperatura de AgroIA Promedio?       -> temperatura promedio de 24 horas
+   • Alexa, ¿cuál es la humedad de AgroIA Ambiente?           -> humedad del aire
+   • Alexa, ¿cuál es la humedad de AgroIA Promedio?           -> humedad del aire promedio de 24 horas
+   • Alexa, ¿cuál es la humedad de AgroIA Suelo?              -> humedad del suelo   (requiere el 3.er dispositivo)
+   Nota: Sinric documenta la humedad por voz en inglés («Alexa, what's the humidity at AgroIA Ambiente?»). En español
+   prueba la frase de arriba; si Alexa no la entiende, usa la versión en inglés o mira el valor en la app.
+
+GOOGLE HOME: ATENCIÓN
+   La documentación oficial de Sinric Pro marca «Google Home: Not Supported» para el tipo Sensor de temperatura.
+   Si en tu Parcial 1 la frase «Ok Google, ¿qué temperatura hay en AgroIA Ambiente?» sí te funcionó, sigue usándola.
+   Si no, usa Alexa o la app de Sinric Pro: ahí siempre se ven la temperatura y la humedad de cada dispositivo.
+
+EN LA APP O PORTAL DE SINRIC PRO (siempre funciona)
+   Abre cada dispositivo: verás la temperatura y la humedad actualizadas cada minuto, y las notificaciones push.
+
+NOTIFICACIONES PUSH (en la app de Sinric Pro, hay que tenerlas activadas)
+   • «AgroIA: suelo seco (NN %). Conviene regar.»  cuando la humedad del suelo baja de 30 %
+   • «AgroIA: suelo encharcado (NN %). Suspende el riego.»  cuando pasa de 75 %
+   Avisa una vez por cambio de estado, y lo recuerda cada 3 horas si sigue igual.
+
+CÓMO COMPROBAR QUE ESTÁ FUNCIONANDO (logs del servicio en Railway)
+   Debe verse:  Conectado a SinricPro con 3 dispositivo(s): ambiente, promedio, suelo
+   y cada minuto:  Enviado -> ambiente: 27.4 °C, 55.0 % | promedio: 32.8 °C, 62.7 % | suelo: 27.4 °C, 42.0 %
+   Si dice «No hay datos disponibles todavía», ni la API ni ThingSpeak tienen lecturas: revisa que el ESP32 envíe.
