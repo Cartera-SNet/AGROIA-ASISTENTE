@@ -45,10 +45,10 @@ VARIABLES = {
                       "normal": (40, 80), "limite": (30, 90), "campo_ts": 2},
     "humedad_suelo": {"nombre": "Humedad del suelo", "corto": "humedad del suelo", "unidad": "%", "dec": 0,
                       "normal": (30, 60), "limite": (20, 75), "campo_ts": 3},
-    "ph":            {"nombre": "pH del suelo", "corto": "pH", "unidad": "", "dec": 1,
-                      "normal": (6.0, 7.5), "limite": (5.5, 8.0), "campo_ts": 4},
+    "tds":           {"nombre": "TDS", "corto": "TDS", "unidad": "ppm", "dec": 0,
+                      "normal": (0, 1000), "limite": (0, 1500), "campo_ts": 4},
 }
-ORDEN = ["temperatura", "humedad_aire", "humedad_suelo", "ph"]
+ORDEN = ["temperatura", "humedad_aire", "humedad_suelo", "tds"]       # el pH ya no se mide: el cuarto sensor es el TDS
 
 
 # ---------------------------------------------------------------------------
@@ -61,15 +61,15 @@ def sin_acentos(t):
 def clave_de_nombre(nombre):
     """Reconoce la variable por el NOMBRE del parametro en la base (no por un numero fijo)."""
     n = sin_acentos(nombre).lower()
+    if re.search(r"\btds\b|solidos|conductividad|salinidad", n):       # primero: "TDS del suelo" no es la humedad del suelo
+        return "tds"
     if "humedad" in n and any(k in n for k in ("aire", "ambient", "relativ")):
         return "humedad_aire"
     if "humedad" in n or "moisture" in n:
         return "humedad_suelo"
     if "temp" in n:
         return "temperatura"
-    if re.search(r"\bph\b|acidez", n):
-        return "ph"
-    return None
+    return None                                                          # (pH y otros parametros viejos se ignoran)
 
 
 def ahora_colombia():
@@ -256,6 +256,23 @@ def thingspeak_ultimo():
 
 
 # ---------------------------------------------------------------------------
+# Orden al ESP32 (LED): POST /esp32/comando  { "accion": "encender_led" | "apagar_led" }
+# ---------------------------------------------------------------------------
+def enviar_comando(accion):
+    """-> (ok, respuesta). El ESP32 la recoge (una sola vez) con GET /esp32/comando."""
+    try:
+        r = requests.post(f"{API_URL}/esp32/comando", json={"accion": accion}, timeout=12)
+        try:
+            d = r.json()
+        except ValueError:
+            d = {}
+        return (r.ok and d.get("ok") is not False), d
+    except Exception as e:                           # noqa: BLE001
+        log.warning("No se pudo enviar la orden al ESP32: %s", e)
+        return False, {"detalle": "no pude comunicarme con la API"}
+
+
+# ---------------------------------------------------------------------------
 # Foto de suelo -> YOLO (POST /vision/analizar)
 # ---------------------------------------------------------------------------
 def analizar_foto(contenido, nombre="foto.jpg", tipo="image/jpeg"):
@@ -285,7 +302,7 @@ def snapshot(forzar=False, basico=False):
         log.warning("API no disponible: %s", e)
         s["avisos"].append("La API no respondio")
     faltan = [c for c in ORDEN if c not in s["ultimos"]]
-    if faltan:                                       # completa con ThingSpeak lo que falte (por ejemplo el pH)
+    if faltan:                                       # completa con ThingSpeak lo que falte (por ejemplo el TDS)
         try:
             ts = thingspeak_ultimo()
             for c in faltan:

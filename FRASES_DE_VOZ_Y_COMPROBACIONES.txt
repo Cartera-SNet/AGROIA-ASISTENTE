@@ -5,7 +5,7 @@ QUÉ DATOS TIENE CADA DISPOSITIVO (probado: los valores que se envían son los c
    AgroIA Ambiente   temperatura del aire (última)      +  humedad del AIRE (última)
    AgroIA Promedio   temperatura promedio de 24 horas   +  humedad del aire promedio de 24 horas
    AgroIA Suelo      humedad del SUELO (última)   [opcional; su «temperatura» es la del aire: pregunta por la humedad]
-   (El pH no se puede consultar por voz: Sinric Pro no tiene un tipo de dispositivo para pH. Pregúntalo en el bot de Telegram.)
+   (El TDS no se puede consultar por voz: Sinric Pro no tiene un tipo de dispositivo para TDS. Pregúntalo en el bot de Telegram.)
 
 FRASES PARA ALEXA (documentadas por Sinric Pro para sensores de temperatura)
    • Alexa, ¿cuál es la temperatura de AgroIA Ambiente?       -> temperatura del aire, última lectura

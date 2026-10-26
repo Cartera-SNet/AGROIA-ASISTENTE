@@ -27,3 +27,5 @@ Antes mezclaba todas las variables; ahora filtra por variable. Si la humedad del
 Sube **el contenido** de esta carpeta al repositorio del puente en GitHub. Railway vuelve a desplegar solo. En el registro (logs) debe verse: `Conectado a SinricPro con 2 (o 3) dispositivo(s)` y, cada minuto, `Enviado -> ambiente: ...`.
 
 Frases de voz y comprobaciones: ver `FRASES_DE_VOZ_Y_COMPROBACIONES.txt`.
+
+> **Contexto completo y siempre actualizado del programa (los 4 componentes): ver `CONTEXTO.md`.**
