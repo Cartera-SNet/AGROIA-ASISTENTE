@@ -15,13 +15,19 @@ No usa el ESP32 para nada. Cada INTERVALO_SEGUNDOS (60 por defecto):
 Variables de entorno (Railway):
   SINRIC_APP_KEY, SINRIC_APP_SECRET, SINRIC_DEVICE_AMBIENTE, SINRIC_DEVICE_PROMEDIO   obligatorias
   SINRIC_DEVICE_SUELO      opcional (ID de un 3.er dispositivo "AgroIA Suelo", tipo Temperature Sensor)
-  API_URL                  opcional (por defecto https://agroiabackend.up.railway.app)
+  USAR_API                 opcional (por defecto 0): 0 = lee SOLO ThingSpeak; 1 = lee la API de AgroIA (Railway)
+  API_URL                  solo si USAR_API=1 (por defecto https://agroiabackend.up.railway.app)
   INTERVALO_SEGUNDOS       opcional (por defecto 60)
+
+Por qué USAR_API=0: este puente consulta cada INTERVALO_SEGUNDOS. Si llamara a la API de Railway, el servicio
+de la API (Serverless) jamás podría dormirse, porque Railway lo duerme tras 10 minutos sin tráfico.
 """
 import asyncio
 import os
 import statistics
 import time
+
+os.environ.setdefault("USAR_API", "0")          # antes de importar datos_agroia: por defecto no despierta la API
 
 from sinricpro import SinricPro, SinricProConfig, SinricProTemperatureSensor
 
@@ -125,7 +131,7 @@ async def ciclo_principal():
             sensores[nombre] = SinricProTemperatureSensor(device_id)
             client.add(sensores[nombre])
     await client.begin(SinricProConfig(app_key=APP_KEY, app_secret=APP_SECRET))
-    print(f"Conectado a SinricPro con {len(sensores)} dispositivo(s): {', '.join(sensores)}. Datos desde {D.API_URL}")
+    print(f"Conectado a SinricPro con {len(sensores)} dispositivo(s): {', '.join(sensores)}. Datos desde {D.API_URL if D.USAR_API else 'ThingSpeak (canal ' + D.THINGSPEAK_CANAL + ')'}")
 
     estado = {"alerta": "ok", "t": 0}
     while True:

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Versión del documento** | **v1.3** |
+| **Versión del documento** | **v1.5** |
 | **Última actualización** | 23 de octubre de 2026 |
 | **Proyecto** | AgroIA — Diagnóstico de fertilidad del suelo |
 | **Asignatura** | Inteligencia Artificial 26-2 · CUL · Docente: Bryan Josser Fernández Ebrath |
@@ -55,6 +55,18 @@ Un **ESP32** con sensores mide **temperatura del aire, humedad del aire, humedad
 
 **ThingSpeak** (canal 3540815): campo 1 = temperatura del aire (°C) · campo 2 = humedad del aire (%) · campo 3 = humedad del suelo (%) · campo 4 = **TDS (ppm)**. *(El pH ya no se mide.)* Enviar cada **≥ 20 s** (la cuenta gratis exige ≥ 15 s). La *Write API Key* se entrega **solo por privado** a José, nunca al grupo.
 
+**Modelo de datos y nombres oficiales (v1.4).** Cada muestra que el ESP32 envía a la API (`POST /muestras/create`) lleva `Sensor_Id` (qué sensor físico), `Parametro_Id` (qué se midió) y `Muestra_Valor`. El **tipo de sensor** (`TipoSensor_Id`) **no se manda**: cuelga del sensor. La página, el bot, Sinric y el menú del LCD reconocen cada variable por el **nombre del parámetro**, no por un id.
+
+| Variable | Parámetro (`parametros_medidos`) | Tipo de sensor (`tipos_sensor`) | Campo ThingSpeak | Letra LCD |
+|---|---|---|---|---|
+| Temperatura | Temperatura del aire (°C) | Temperatura del aire *(hoy en la base: «Temperatura», id 2)* | 1 | T |
+| Humedad del aire | Humedad del aire (%) | Humedad del aire *(hoy: «Humedad ambiental», id 3)* | 2 | A |
+| Humedad del suelo | Humedad del suelo (%) | Humedad del suelo *(id 1)* | 3 | S |
+| TDS | TDS (ppm) | TDS *(id 5)* | 4 | D |
+| pH | *(retirado: se ignora)* | pH *(id 4, retirado)* | — | — |
+
+Los nombres antiguos («Temperatura», «Humedad ambiental», «TDS del suelo», «Sólidos disueltos totales») también se reconocen; los recomendados son los de la tabla. Un DHT puede ser un solo sensor que envía temperatura y humedad del aire. Para que el TDS quede bien guardado deben existir: el **parámetro «TDS»**, un **sensor de tipo TDS (id 5)**, y el ESP32 debe mandar el `Parametro_Id` del TDS y el `Sensor_Id` de ese sensor. No hay endpoint para borrar: el pH retirado simplemente se ignora.
+
 **Neon (PostgreSQL)**, tablas clave: `muestras_suelo` (`Muestra_Id`, `Sensor_Id`, `Parametro_Id`, `Muestra_Valor`, `Muestra_FechaHora`), `parametros_medidos`, `sensores`, `lotes_tierra`, `usuarios` y otras. El ESP32 envía cada lectura con `POST /muestras/create` `{Sensor_Id, Parametro_Id, Muestra_Valor}`.
 
 **Hora de las muestras:** si no viene fecha, el backend guarda `datetime.now()` **del servidor** (UTC en Railway). Colombia es UTC-5. *Supuesto a confirmar:* que todas las muestras estén en UTC (si hubo pruebas con el backend en un PC local, algunas pueden estar en hora de Colombia).
@@ -105,6 +117,8 @@ Un **ESP32** con sensores mide **temperatura del aire, humedad del aire, humedad
 - **Gráficas = iframes oficiales de ThingSpeak** (`tsChartUrl` en `js/ts.js`): la dirección sigue la plantilla de los códigos *Embed* F1–F4 del canal (F1–F3 son idénticos; el F4 usa el título y el eje del TDS) (`bgcolor`, `color`, `dynamic=true`, `results=60`, `title`, `type`, `xaxis=Hora`, `yaxis`): F1 temperatura (línea, `#ef4444`), F2 humedad del aire (columnas, `#3b82f6`), F3 humedad del suelo (línea, `#16a34a`), F4 TDS (línea, `#8b5cf6`, título «TDS (ppm)», eje «ppm»). Se usan en **Inicio** (4 tarjetas con etiqueta «Campo N», enlace a ThingSpeak y nivel óptimo/alto/bajo) y **Monitoreo**. El **Historial** muestra los iframes del rango elegido (`start`, `end`, `timezone=America/Bogota`, `average`, `dynamic=false`) junto a la tabla, las tarjetas de promedio y el CSV. No quedan gráficos dibujados por la página, salvo el anillo del % de fertilidad en Predicción.
 - **Diseño del Inicio:** tarjetas de valores arriba; gráficas en 2 columnas de 1100 a 1599 px, 4 columnas desde 1600 px y 1 columna en celular. Cada iframe mide 262 px de alto.
 - **Campo 4 vacío:** si el canal no trae datos del campo 4, la tarjeta dice «Sin lecturas de TDS en el canal» y el chat explica que el ESP32 aún no envía ese campo.
+- **`diagnostico.html` (v1.4):** página de diagnóstico (también suelta como `AgroIA_Diagnostico.html`; se abre con doble clic, sin iniciar sesión, y solo lee). Revisa ThingSpeak (antigüedad de la última entrada y datos por campo) y la API (parámetros, tipos de sensor, sensores, última muestra de cada variable, qué `Sensor_Id`/`Parametro_Id` debe usar el ESP32, lo que mostraría el LCD) y da un semáforo con el cuerpo exacto de cada arreglo en Swagger y un informe para copiar y pegar en el chat. Probada con 3 situaciones simuladas (ESP32 caído, TDS con el sensor equivocado, todo bien).
+- **Estado del sistema (v1.4):** si el último dato es viejo, la barra superior dice «Sin datos recientes · hace N día(s)» y el lateral muestra la fecha además de la hora (antes solo la hora, y un dato de hace días parecía vigente).
 - **Chat web (Inicio y «Chat con IA»), sin depender del servidor:**
   - `js/chat-nlu.js` entiende el mensaje aunque tenga errores de escritura (tildes, mayúsculas, letras de más, de menos o cambiadas, palabras partidas como «encer der», vocales comidas como «encdre»): corrige cada palabra con el vocabulario del proyecto (parecido por sonido y por consonantes) y luego decide la intención.
   - `js/chat-core.js` contesta con datos reales de ThingSpeak: valores, resumen, promedio de 24 h, máximo y mínimo de hoy, desviación, por hora, por día, días bajo el umbral, riego, alertas, recomendaciones, fertilidad, rango ideal, definiciones, sensor en línea, proyecto, enlaces, YOLO y ayuda.
@@ -171,10 +185,15 @@ Cada **60 s** lee los datos **filtrados por variable** y los envía a dispositiv
 - [ ] José: ThingSpeak responde **400** (petición mal armada: clave mal copiada, `nan`, coma decimal, espacios). Probar la clave en el navegador. Entregarle la Write API Key **solo por privado**.
 - [ ] José: firmware con la URL de Railway y consulta periódica a `/esp32/comando`.
 - [ ] **ThingSpeak sin datos nuevos:** la captura del canal marcaba «Last entry: 2 days ago» (último ingreso ~21 oct, 854 entradas). Revisar ESP32, WiFi y que siga enviando.
+- [ ] **EL ESP32 NO ENVÍA NADA desde hace días (26 oct):** el tablero dice «Sin datos recientes» y los gráficos de ThingSpeak muestran los mismos puntos de siempre (19:40–20:04). Mientras eso no se arregle no aparecerá ningún dato, tampoco el TDS: cambiar nombres o ids en la base no afecta a ThingSpeak. Primero: ESP32 encendido, con WiFi y con la Write API Key correcta; luego abrir `diagnostico.html`.
+- [ ] **Base (Neon):** comprobar con `diagnostico.html` que existan el parámetro «TDS» (ppm) y un sensor de tipo TDS (id 5) y que el ESP32 use esos `Parametro_Id` y `Sensor_Id`. Opcional: renombrar los tipos de sensor 2 y 3 («Temperatura del aire», «Humedad del aire»); la página de diagnóstico da el `PUT` exacto.
 - [ ] **Campo 4 = TDS (decidido), pero llega SIN DATOS:** el gráfico del campo 4 en ThingSpeak sigue vacío (cambiar el título del gráfico no crea datos). José debe enviar `field4` con el TDS (solo si la lectura es válida: un `nan` hace que ThingSpeak rechace toda la actualización) y enviarlo también a Neon (`POST /muestras/create` con el parámetro «TDS»). Opcional: actualizar el gráfico del campo 4 en ThingSpeak (título «TDS (ppm)», eje «ppm»). Edge Impulse (Punto 3): el contrato del clasificador ahora lleva `tds` en lugar de `ph`.
 - [ ] **Login con Google:** poner en Railway las 4 variables y configurar Google Cloud (ver §4); crear al menos un usuario (`POST /users/create`).
 - [ ] Thair: proteger `/users/list`, confirmar `DATABASE_URL` en Railway; `/chat` con IA (opcional).
-- [ ] Víctor: variable `API_URL` en los servicios del bot y de Sinric; activar *Serverless* en el panel de Railway si se quiere; `SOLO_DATOS_REALES` si se exige cero invención; opcional crear «AgroIA Suelo» en Sinric.
+- [ ] **Dormir el backend (v1.5):** subir `AGROIA-ASISTENTE` (Sinric sin API) y luego el parche del backend (`railway.toml` + `yolo_service.py`), de uno en uno y esperando ACTIVE; verificar `/docs` y, tras ~15 min sin tráfico, que AgroIABackend pase a «Sleeping». Si no duerme: aplicar el archivo opcional del motor de BD.
+- [ ] **Seguridad tras el incidente de Railway (20–22 oct 2026):** Railway recomienda cambiar las claves guardadas en variables (Neon `DATABASE_URL`, `SECRET_KEY`, secreto de Google, Groq, token de Telegram, claves de Sinric), de una en una y comprobando que `/docs` sigue respondiendo; revisar el registro de auditoría y las apps autorizadas de GitHub.
+- [ ] **Seguridad de la API (verificado con prueba):** sin token se pueden crear usuarios (`POST /users/create`), listar usuarios con su contraseña en texto plano (`/users/list`, `/users/userId`) y encender/apagar el LED (`POST /esp32/comando`). Pendiente de decidir con el equipo (Thair).
+- [ ] Víctor: variable `API_URL` en el servicio del bot (en Sinric ya no hace falta con `USAR_API=0`);
 - [ ] Idioma en inglés de la temperatura en Google.
 - [ ] Edge Impulse; chat de IA completo; video de demostración.
 
@@ -187,7 +206,9 @@ Cada **60 s** lee los datos **filtrados por variable** y los envía a dispositiv
 
 ## 10. Railway: notas
 
-- **Serverless / «sleep application»:** `railway.json` trae `sleepApplication: true`, pero la documentación actual de Railway marca esos archivos de configuración como obsoletos; el método seguro es el panel: servicio → Settings → Deploy → Serverless → Enable, y **redesplegar**. Un servicio dormido tarda en la primera visita (o da un 502 pasajero): abrirlo un minuto antes de presentar.
+- **Serverless / «sleep application» (v1.5):** `deploy.sleepApplication` **sí es una clave válida** del archivo de configuración de Railway (la genera el propio panel), aunque la lista oficial de ajustes no la mencione; en el backend va en `railway.toml` (`sleepApplication = true`). Railway marca los archivos de configuración como obsoletos desde el **1 dic 2026**, así que el interruptor del **panel** (servicio → Settings → Deploy → Serverless) es lo que perdura: déjalo encendido también. Railway duerme un servicio tras **10 min sin tráfico saliente**; una conexión abierta a la base de datos (un pool) y un cliente que consulte cada pocos minutos lo mantienen despierto. La primera petición tras dormir tarda (arranque en frío) o da 502: los clientes deben reintentar (el bot reintenta la orden del LED; el ESP32 debe hacerlo en el firmware). Antes de una presentación, abrir `/docs` uno o dos minutos antes.
+- **Qué impedía dormir el backend (v1.5):** (1) el puente **AGROIA-ASISTENTE** (Sinric) lo consultaba cada 60 s → ahora lee **solo ThingSpeak** (`USAR_API=0` por defecto); (2) YOLO/torch se cargaban al arrancar → ahora se cargan la **primera vez que se usa `/vision`** (`yolo_service.py`, `get_model()`), lo que también baja la RAM base y acorta el arranque en frío. Costo: la **primera** imagen de `/vision` tras cada arranque tarda más y, en el WebSocket `/vision/stream`, bloquea el servidor mientras carga el modelo (una vez por arranque). (3) *Opcional, no aplicado:* motor de BD sin conexiones en reposo (`NullPool`; archivo aparte `OPCIONAL_pool_sin_conexiones`), solo si tras lo anterior sigue sin dormir.
+- **No activar Serverless en AGROIA-ASISTENTE:** mantiene una conexión permanente con Sinric Pro; dormirlo desconectaría los dispositivos. Estado visto el 28 oct: PAgroIA, RuntBot, EXPORTECARTERAS, ExtractorTELEGRAM, GOOGLE-CALENDAR y AgroIA (bot de Telegram) ya duermen; AgroIABackend y AGROIA-ASISTENTE aparecían «Online».
 - Los servicios del bot y de Sinric usan `Procfile` con `web:`; no escuchan HTTP salvo el bot (webhook de Telegram).
 
 ## 11. Qué está verificado y qué no
@@ -212,6 +233,19 @@ Cada **60 s** lee los datos **filtrados por variable** y los envía a dispositiv
 6. **Chat nuevo:** subir este archivo al principio. No hay memoria entre conversaciones; este documento es la memoria.
 
 ## 14. Registro de cambios (lo más reciente arriba)
+
+### v1.5 — 28 oct 2026 — El backend puede dormir (Serverless) sin dañar nada
+- **Sinric (AGROIA-ASISTENTE):** `USAR_API=0` por defecto: lee solo ThingSpeak (último valor, 40 lecturas recientes y 24 promedios por hora) y no llama a la API de Railway. `datos_agroia.py` gana `thingspeak_series()`, `USAR_API` y reintentos en `enviar_comando()` (el servidor puede estar despertando).
+- **Backend:** parche de dos archivos sobre el código del equipo: `railway.toml` (`sleepApplication = true`) y `app/services/yolo_service.py` (carga perezosa de YOLO con cerrojo). Probado: la app arranca sin importar ultralytics/torch, `/docs` responde y las 63 rutas siguen. Archivo opcional aparte: motor de BD sin conexiones en reposo.
+- **Hallazgo:** el log de Railway mostraba `/muestras/list` + `/menu/promedio-24h` cada minuto: era Sinric. El ESP32 no aparece (sigue sin enviar).
+- **Incidente de Railway:** el panel mostró compilaciones fallando/atascadas el 28 oct; el despliegue activo siguió sirviendo. Ver pendiente de seguridad.
+
+### v1.4 — 26 oct 2026 — Diagnóstico de datos, nombres oficiales y estado con antigüedad
+- **Hallazgo (capturas del usuario):** el tablero marca «Sin datos recientes» y su última lectura es la de las 8:04 PM de hace días; ThingSpeak no recibe nada (ni temperatura ni humedades), por eso el TDS sigue vacío. La base tiene tipos de sensor 1 humedad del suelo, 2 temperatura, 3 humedad ambiental, 4 pH, 5 TDS; el pH queda retirado y los datos del TDS deben ir con el sensor de tipo 5.
+- **Frontend:** nueva `diagnostico.html`; el estado del sistema indica cuánto hace del último dato (`js/layout.js`).
+- **Backend:** `menu_routes.py`: «Humedad ambiental»/«ambiente» se abrevian **A**; `ultimo-registro` ya no muestra parámetros retirados (solo los que tienen datos dentro de las 24 h previas a la muestra más reciente, así el pH viejo no aparece). Probado contra PostgreSQL real (18 comprobaciones).
+- **Bot y Sinric:** sin cambios de comportamiento; se verificó que reconocen los nombres de la base («Temperatura», «Humedad ambiental», «TDS», «Sólidos disueltos totales») e ignoran el pH.
+- **Documento:** nueva tabla de «Modelo de datos y nombres oficiales» (§3).
 
 ### v1.3 — 23 oct 2026 — El cuarto sensor es TDS (ya no pH) en todo el proyecto
 - **Frontend (código):** el campo 4 pasa de pH a **TDS (ppm)** en la configuración (`tds:4`), las 4 tarjetas, el iframe del campo 4 (título «TDS (ppm)», eje «ppm»), Historial (columna, filtro, CSV `tds_ppm`, buscador), Predicción (el formulario pide TDS; el contrato del clasificador lleva `tds`) y el chat (entiende TDS, «sólidos disueltos», «ppm»; si preguntan por el pH explica que ya no se mide). Icono de 3 letras «TDS».

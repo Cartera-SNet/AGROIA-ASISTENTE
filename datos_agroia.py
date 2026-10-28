@@ -25,6 +25,9 @@ log = logging.getLogger("agroia.datos")
 # Configuracion (todas las variables son opcionales)
 # ---------------------------------------------------------------------------
 API_DEFECTO = "https://agroiabackend.up.railway.app"
+# USAR_API=0 -> no consulta la API de AgroIA: usa solo ThingSpeak. Es para el puente de Sinric, que consulta cada 60 s:
+# si llamara a la API, Railway (Serverless) nunca podria dormirla.
+USAR_API = os.environ.get("USAR_API", "1").strip().lower() not in ("0", "no", "false", "off")
 API_URL = (os.environ.get("API_URL") or API_DEFECTO).strip().rstrip("/")
 if "onrender.com" in API_URL:                      # Render ya no se usa: toda la API esta en Railway
     log.warning("API_URL apuntaba a Render (%s). Se usa Railway: %s", API_URL, API_DEFECTO)
@@ -255,21 +258,64 @@ def thingspeak_ultimo():
     return out
 
 
+def thingspeak_series(n=40):
+    """Solo ThingSpeak -> (recientes {clave: [valores, del mas reciente al mas antiguo]}, prom24 {clave: promedio de las ultimas 24 h})"""
+    base = f"{THINGSPEAK_BASE}/channels/{THINGSPEAK_CANAL}/feeds.json"
+
+    def col(feeds, c, orden_inverso):
+        campo, out = f"field{VARIABLES[c]['campo_ts']}", []
+        for f in (reversed(feeds) if orden_inverso else feeds):
+            try:
+                out.append(float(f[campo]))
+            except (TypeError, ValueError, KeyError):
+                pass
+        return out
+
+    rec, prom = {}, {}
+    j = _get_json(f"{base}?results={n}", timeout=15, reintentos=0)
+    feeds = j.get("feeds", []) if isinstance(j, dict) else []
+    for c in ORDEN:
+        v = col(feeds, c, True)
+        if v:
+            rec[c] = v
+    j = _get_json(f"{base}?days=1&average=60", timeout=15, reintentos=0)           # 24 promedios de una hora
+    feeds = j.get("feeds", []) if isinstance(j, dict) else []
+    for c in ORDEN:
+        v = col(feeds, c, False)
+        if v:
+            prom[c] = sum(v) / len(v)
+    return rec, prom
+
+
 # ---------------------------------------------------------------------------
 # Orden al ESP32 (LED): POST /esp32/comando  { "accion": "encender_led" | "apagar_led" }
 # ---------------------------------------------------------------------------
+COMANDO_INTENTOS = 6          # el backend puede estar dormido (Railway Serverless): el primer intento puede dar 502 o tardar
+COMANDO_ESPERA = 5            # segundos entre intentos
+COMANDO_TIMEOUT = 20          # segundos por intento
+
+
 def enviar_comando(accion):
-    """-> (ok, respuesta). El ESP32 la recoge (una sola vez) con GET /esp32/comando."""
-    try:
-        r = requests.post(f"{API_URL}/esp32/comando", json={"accion": accion}, timeout=12)
+    """-> (ok, respuesta). El ESP32 la recoge (una sola vez) con GET /esp32/comando.
+    Si el servidor estaba dormido (502/503/504 o sin respuesta) espera y reintenta hasta COMANDO_INTENTOS veces."""
+    ultimo = {"detalle": "no pude comunicarme con la API"}
+    for i in range(COMANDO_INTENTOS):
         try:
-            d = r.json()
-        except ValueError:
-            d = {}
-        return (r.ok and d.get("ok") is not False), d
-    except Exception as e:                           # noqa: BLE001
-        log.warning("No se pudo enviar la orden al ESP32: %s", e)
-        return False, {"detalle": "no pude comunicarme con la API"}
+            r = requests.post(f"{API_URL}/esp32/comando", json={"accion": accion}, timeout=COMANDO_TIMEOUT)
+            if r.status_code in (502, 503, 504):
+                ultimo = {"detalle": "el servidor de AgroIA estaba despertando y no alcanzó a responder"}
+            else:
+                try:
+                    d = r.json()
+                except ValueError:
+                    d = {}
+                return (r.ok and d.get("ok") is not False), d
+        except Exception as e:                       # noqa: BLE001
+            log.warning("No se pudo enviar la orden al ESP32 (intento %s): %s", i + 1, e)
+            ultimo = {"detalle": "no pude comunicarme con la API"}
+        if i < COMANDO_INTENTOS - 1:
+            time.sleep(COMANDO_ESPERA)
+    return False, ultimo
 
 
 # ---------------------------------------------------------------------------
@@ -293,14 +339,24 @@ def snapshot(forzar=False, basico=False):
         return _cache["snap"]
     s = {"fuente": None, "ultimos": {}, "recientes": {}, "prom24": {}, "maxmin": {}, "dias_bajo": None,
          "por_dia": None, "por_hora": None, "parametros_db": [], "avisos": [], "generado": ahora_colombia()}
-    try:
-        s["ultimos"], s["recientes"], s["parametros_db"] = datos_api()
-        if s["ultimos"]:
-            s["fuente"] = "API de AgroIA (base de datos)"
-        s.update(estadisticas_api(solo_prom=basico))
-    except Exception as e:                           # noqa: BLE001
-        log.warning("API no disponible: %s", e)
-        s["avisos"].append("La API no respondio")
+    if not USAR_API:                                 # solo ThingSpeak (puente de Sinric): no despierta la API de Railway
+        try:
+            s["ultimos"] = thingspeak_ultimo()
+            s["recientes"], s["prom24"] = thingspeak_series()
+            if s["ultimos"]:
+                s["fuente"] = "ThingSpeak (canal %s)" % THINGSPEAK_CANAL
+        except Exception as e:                       # noqa: BLE001
+            log.warning("ThingSpeak no disponible: %s", e)
+            s["avisos"].append("ThingSpeak no respondio")
+    else:
+        try:
+            s["ultimos"], s["recientes"], s["parametros_db"] = datos_api()
+            if s["ultimos"]:
+                s["fuente"] = "API de AgroIA (base de datos)"
+            s.update(estadisticas_api(solo_prom=basico))
+        except Exception as e:                       # noqa: BLE001
+            log.warning("API no disponible: %s", e)
+            s["avisos"].append("La API no respondio")
     faltan = [c for c in ORDEN if c not in s["ultimos"]]
     if faltan:                                       # completa con ThingSpeak lo que falte (por ejemplo el TDS)
         try:
