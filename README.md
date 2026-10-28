@@ -8,6 +8,7 @@ Cada 60 segundos lee los datos de AgroIA y los sube a Sinric Pro, para consultar
 | **AgroIA Promedio** | temperatura promedio de 24 h | humedad del aire promedio de 24 h |
 | **AgroIA Suelo** *(opcional)* | la del aire (referencia: no se mide temperatura del suelo) | humedad del **suelo**, última lectura |
 
+
 Antes mezclaba todas las variables; ahora filtra por variable. Si la humedad del suelo baja de 30 % o pasa de 75 %, envía una notificación push (una vez por cambio de estado, o cada 3 horas si sigue igual).
 
 ## Variables de entorno (Railway)
