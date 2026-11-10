@@ -21,6 +21,7 @@ import requests
 
 log = logging.getLogger("agroia.datos")
 
+
 # ---------------------------------------------------------------------------
 # Configuracion (todas las variables son opcionales)
 # ---------------------------------------------------------------------------
